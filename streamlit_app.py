@@ -1,44 +1,31 @@
 import streamlit as st
-import cv2
-import pytesseract
-import pandas as pd
-import numpy as np
-from PIL import Image
-import io
-import base64
+import os
 
-# 1. Drag and drop images
-uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png"])
+# Streamlit configurations
+st.set_option('deprecation.showfileUploaderEncoding', False)
 
-if uploaded_file is not None:
-    image = Image.open(uploaded_file)
-    st.image(image, caption='Uploaded Image.', use_column_width=True)
-    
-    # Convert the PIL Image to a numpy array before processing
-    image = np.array(image)
+def save_image(image, image_name):
+    # Define the path where you want to save the images
+    image_path = '/path/to/save/images/'
 
-    # 2. Optimize the image for OCR
-    # Convert the image to grayscale
-    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-    # Apply dilation and erosion to remove some noise
-    kernel = np.ones((1, 1), np.uint8)
-    img = cv2.dilate(grayscale, kernel, iterations=1)
-    img = cv2.erode(img, kernel, iterations=1)
-    
-    # Apply blur to smooth out the edges
-    img = cv2.GaussianBlur(img, (5, 5), 0)
-    
-    # 3. OCR to extract the information
-    # Remember to add your tesseract path here
-    pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract' 
-    result = pytesseract.image_to_string(img)
-    st.write(result)
-    
-    # 4. Store into a CSV
-    df = pd.DataFrame([result], columns=['Text'])
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
-    href = f'<a href="data:file/csv;base64,{b64}">Download CSV File</a> (right-click and save as &lt;some_name&gt;.csv)'
-    st.markdown(href, unsafe_allow_html=True)
+    # Save the image
+    with open(os.path.join(image_path, image_name), 'wb') as f:
+        f.write(image.getbuffer())
+    return f"Image {image_name} saved!"
+
+for i in range(5):
+    st.write(f'### Game {i+1}')
+
+    image1 = st.file_uploader("Drop your first image here", type=['png', 'jpg', 'jpeg'], key=f'1-{i}')
+    image2 = st.file_uploader("Drop your second image here", type=['png', 'jpg', 'jpeg'], key=f'2-{i}')
+
+    if image1 and image2:
+        image1_name = f'partida{i+1}-imagen1'
+        image2_name = f'partida{i+1}-imagen2'
+
+        save_message1 = save_image(image1, image1_name)
+        save_message2 = save_image(image2, image2_name)
+
+        st.write(save_message1)
+        st.write(save_message2)
 
