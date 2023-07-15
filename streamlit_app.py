@@ -2,6 +2,7 @@ import streamlit as st
 import cv2
 import pytesseract
 import pandas as pd
+import numpy as np
 from PIL import Image
 import io
 import base64
@@ -13,9 +14,12 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
     st.image(image, caption='Uploaded Image.', use_column_width=True)
     
+    # Convert the PIL Image to a numpy array before processing
+    image = np.array(image)
+
     # 2. Optimize the image for OCR
     # Convert the image to grayscale
-    grayscale = cv2.cvtColor(np.array(image), cv2.COLOR_BGR2GRAY)
+    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     
     # Apply dilation and erosion to remove some noise
     kernel = np.ones((1, 1), np.uint8)
