@@ -1,38 +1,54 @@
-from collections import namedtuple
-import altair as alt
-import math
-import pandas as pd
 import streamlit as st
+import requests
+import csv
+import base64
 
-"""
-# Welcome to Streamlit!
+# OCR.space API key and endpoint
+api_key = 'K82787541488957'
+endpoint = 'https://api.ocr.space/parse/image'
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:
+# Initialize an empty list to store image URLs
+image_urls = []
 
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+# Start of Streamlit application
+st.title('OCR Application')
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+uploaded_file = st.file_uploader("Choose an image file")
+if uploaded_file is not None:
+    image_urls.append(uploaded_file.getvalue())
 
+# Button to start OCR process
+if st.button('Start OCR'):
+    # Loop through image URLs and perform OCR on each image
+    for url in image_urls:
+        # Request OCR using API endpoint and image URL
+        response = requests.post(endpoint, 
+            files={'url': (None, url)},
+            data={
+                'apikey': api_key,
+                'language': 'eng'
+            })
 
-with st.echo(code_location='below'):
-    total_points = st.slider("Number of points in spiral", 1, 5000, 2000)
-    num_turns = st.slider("Number of turns in spiral", 1, 100, 9)
+        # Parse OCR results from response JSON
+        result = response.json()
+        if result['IsErroredOnProcessing']:
+            st.write(f'OCR error: {result["ErrorMessage"]}')
+        else:
+            parsed_results = result['ParsedResults']
+            if len(parsed_results) > 0:
+                text = parsed_results[0]['ParsedText']
+                st.write(f'OCR result for {url}: {text}')
 
-    Point = namedtuple('Point', 'x y')
-    data = []
-
-    points_per_turn = total_points / num_turns
-
-    for curr_point_num in range(total_points):
-        curr_turn, i = divmod(curr_point_num, points_per_turn)
-        angle = (curr_turn + 1) * 2 * math.pi * i / points_per_turn
-        radius = curr_point_num / total_points
-        x = radius * math.cos(angle)
-        y = radius * math.sin(angle)
-        data.append(Point(x, y))
-
-    st.altair_chart(alt.Chart(pd.DataFrame(data), height=500, width=500)
-        .mark_circle(color='#0068c9', opacity=0.5)
-        .encode(x='x:Q', y='y:Q'))
+                # Write results to CSV
+                with open('ocr_results.csv', 'w', newline='') as file:
+                    writer = csv.writer(file)
+                    writer.writerow(["Image URL", "OCR Result"])
+                    writer.writerow([url, text])
+                    
+    # Download CSV button
+    if st.button('Download CSV'):
+        with open('ocr_results.csv', 'r') as file:
+            csv = file.read()
+        b64 = base64.b64encode(csv.encode()).decode()  # some strings
+        href = f'<a href="data:file/csv;base64,{b64}" download="ocr_results.csv">Download CSV File</a>'
+        st.markdown(href, unsafe_allow_html=True)
