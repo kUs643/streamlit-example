@@ -4,4 +4,3 @@ pytesseract
 pandas
 Pillow
 numpy
-tesseract-ocr
