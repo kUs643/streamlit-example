@@ -3,6 +3,7 @@ from PIL import Image
 import os
 import shutil
 import zipfile
+import base64
 
 # Coordenadas de corte para las diferentes partes
 PARTS = {
@@ -37,8 +38,15 @@ def create_zip_folder(folder_name):
     with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
         for root, dirs, files in os.walk(folder_name):
             for file in files:
-                zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), folder_name))
+                zipf.write(os.path.join(root, file), arcname=os.path.basename(file))
     return zip_filename
+
+def get_binary_file_downloader_html(bin_file, file_label='File'):
+    with open(bin_file, 'rb') as f:
+        data = f.read()
+    bin_str = base64.b64encode(data).decode()
+    href = f'<a href="data:application/octet-stream;base64,{bin_str}" download="{os.path.basename(bin_file)}">Descargar {file_label}</a>'
+    return href
 
 def app():
     st.title("Analizador de imágenes de Valorant")
@@ -62,9 +70,7 @@ def app():
             folder_name = 'descargas'
             save_images(all_images, folder_name)
             zip_filename = create_zip_folder(folder_name)
-            with open(zip_filename, "rb") as f:
-                bytes = f.read()
-                st.download_button(label="Descargar imágenes", data=bytes, file_name=folder_name, mime="application/zip")
+            st.markdown(get_binary_file_downloader_html(zip_filename, 'ZIP'), unsafe_allow_html=True)
 
     elif page == "Página 2":
         st.header("Página 2")
