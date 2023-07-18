@@ -1,7 +1,8 @@
 import streamlit as st
 from PIL import Image
 import os
-import io
+import shutil
+import zipfile
 
 # Coordenadas de corte para las diferentes partes
 PARTS = {
@@ -30,6 +31,15 @@ def handle_upload(file, part):
         return cut_images
     return {}
 
+def create_zip_folder(folder_name):
+    """Crea un archivo ZIP de la carpeta dada"""
+    zip_filename = f"{folder_name}.zip"
+    with zipfile.ZipFile(zip_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(folder_name):
+            for file in files:
+                zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), folder_name))
+    return zip_filename
+
 def app():
     st.title("Analizador de imágenes de Valorant")
     st.sidebar.title("Navegación")
@@ -48,8 +58,13 @@ def app():
             if i < 5:
                 st.markdown("---")  # Linea separadora
 
-        if st.button("Descargar imágenes"):
-            save_images(all_images, 'descargas')
+        if st.button("Crear archivos"):
+            folder_name = 'descargas'
+            save_images(all_images, folder_name)
+            zip_filename = create_zip_folder(folder_name)
+            with open(zip_filename, "rb") as f:
+                bytes = f.read()
+                st.download_button(label="Descargar imágenes", data=bytes, file_name=folder_name, mime="application/zip")
 
     elif page == "Página 2":
         st.header("Página 2")
