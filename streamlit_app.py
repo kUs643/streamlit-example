@@ -80,7 +80,7 @@ def app():
     elif page == "Extractor":
         st.header("Extractor")
         # Implementa la funcionalidad de la página 2 aquí
-    def process_img_1(img):
+def process_img_1(img):
     img_gray = img.convert("L")
     img_darkened = img_gray.point(lambda p: p * 0.9)
     img_enhanced = img_darkened.point(lambda p: 255 * (p / 255) ** 0.8)
@@ -136,12 +136,12 @@ def main():
             
             st.write(ocr_results)
 
-            if st.button('Download CSV'):
-                df = pd.DataFrame(ocr_results)
-                csv = df.to_csv(index=False)
-                b64 = base64.b64encode(csv.encode()).decode()
-                href = f'<a href="data:file/csv;base64,{b64}" download="ocr_results.csv">Download CSV File</a>'
-                st.markdown(href, unsafe_allow_html=True)
+        if st.button('Download CSV'):
+            df = pd.DataFrame(ocr_results)
+            csv = df.to_csv(index=False)
+            b64 = base64.b64encode(csv.encode()).decode()
+            href = f'<a href="data:file/csv;base64,{b64}" download="ocr_results.csv">Download CSV File</a>'
+            st.markdown(href, unsafe_allow_html=True)
 
     elif page == "Página 3":
         st.header("Página 3")
