@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import requests
 import pandas as pd
+import base64
 
 # Define las funciones para procesar las imágenes
 
@@ -34,7 +35,7 @@ def ocr_space(image_path, api_key):
     
     # Define los parámetros de la API de OCR.space
     url = 'https://api.ocr.space/parse/image'
-    headers = {'K82787541488957': api_key}
+    headers = {'apikey': api_key}
     data = {'file': img_data, 'OCREngine': 2}
     
     # Envia la solicitud y recupera la respuesta
@@ -77,7 +78,7 @@ if uploaded_files:
             img.save('processed_' + uploaded_file.name)
             
             # Extrae el texto de la imagen procesada
-            text = ocr_space('processed_' + uploaded_file.name, YOUR_API_KEY)
+            text = ocr_space('processed_' + uploaded_file.name, 'K82787541488957')
             
             # Añade el resultado al dataframe
             df = df.append({'Imagen': uploaded_file.name, 'Texto': text}, ignore_index=True)
