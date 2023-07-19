@@ -1,85 +1,52 @@
 import streamlit as st
-import numpy as np
-from PIL import Image, ImageOps
-import cv2
-import requests
-import pandas as pd
-import base64
+from PIL import Image
+import os
 
-def process_img_1(img):
-    img_gray = img.convert("L")
-    img_darkened = img_gray.point(lambda p: p * 0.9)
-    img_enhanced = img_darkened.point(lambda p: 255 * (p / 255) ** 0.8)
-    return img_enhanced
+# Crear una lista para almacenar todas las imágenes de las partidas
+imagenes_partidas = [None]*5
 
-def process_img_2(img):
-    img_gray = img.convert("L")
-    threshold = 100
-    img_binary = img_gray.point(lambda p: p > threshold and 255)
-    img_inverted = Image.fromarray(np.array(img_binary) ^ 255)
-    final_img = img_inverted.convert("RGB")
-    return final_img
+# Crear directorio para almacenar imágenes cortadas
+if not os.path.exists('cortadas'):
+    os.makedirs('cortadas')
 
-def process_img_3(img):
-    img_gray = img.convert('L')
-    _, img_binary = cv2.threshold(np.array(img_gray), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    img_binary_pil = Image.fromarray(img_binary)
-    img_inverted = ImageOps.invert(img_binary_pil)
-    erosion_kernel = np.ones((3,3),np.uint8)
-    img_eroded = cv2.erode(np.array(img_inverted), erosion_kernel, iterations = 1)
-    return img_eroded
+# Crear la barra de navegacion
+st.sidebar.title("Navegación")
+navigation = st.sidebar.radio("Ir a", ['Organizador', 'Otro', 'Inyector'])
 
-def ocr_space(image, overlay=False, api_key='K82787541488957', language='eng', ocr_engine='2'):
-    payload = {'isOverlayRequired': overlay,
-               'apikey': api_key,
-               'language': language,
-               'OCREngine': ocr_engine}
-    response = requests.post('https://api.ocr.space/parse/image',
-                             files={filename: image},
-                             data=payload)
-    result = response.json()
-    text_detected = result.get('ParsedResults')[0].get('ParsedText')
-    return text_detected
+if navigation == 'Organizador':
+    # Crear los recuadros para subir las imágenes
+    for i in range(5):
+        st.header(f"Partida {i+1}")
+        uploaded_file = st.file_uploader(f"Sube la imagen para la partida {i+1}", type=['png', 'jpg', 'jpeg'])
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file)
+            imagenes_partidas[i] = image
+            st.image(image, caption=f"Imagen subida para la partida {i+1}.", use_column_width=True)
 
-def extractor_page():
-    st.header("Extractor")
-    uploaded_files = st.file_uploader("Upload Images", accept_multiple_files=True)
+    # Botón para cortar y guardar las imágenes
+    if st.button('Cortar y guardar imágenes'):
+        for i, image in enumerate(imagenes_partidas):
+            if image is not None:
+                # Definir las regiones a cortar
+                box1 = (55, 79, 55+197, 79+96)
+                box2 = (743, 72, 743+379, 72+91)
+                box3 = (332, 299, 332+1257, 299+298)
 
-    if uploaded_files:
-        if st.button('Convert'):
-            ocr_results = []
-            for file in uploaded_files:
-                img = Image.open(file)
-                if 'part1' in file.name:
-                    processed_img = process_img_1(img)
-                elif 'part2' in file.name:
-                    processed_img = process_img_2(img)
-                else:
-                    processed_img = process_img_3(img)
+                # Cortar las imágenes
+                cropped1 = image.crop(box1)
+                cropped2 = image.crop(box2)
+                cropped3 = image.crop(box3)
 
-                ocr_result = ocr_space(processed_img)
-                ocr_results.append({file.name: ocr_result})
+                # Guardar las imágenes cortadas
+                cropped1.save(f"cortadas/partida{i+1}-parte1.jpg")
+                cropped2.save(f"cortadas/partida{i+1}-parte2.jpg")
+                cropped3.save(f"cortadas/partida{i+1}-parte3.jpg")
 
-            st.write(ocr_results)
+        st.success('¡Imágenes cortadas y guardadas!')
 
-        if st.button('Download CSV'):
-            df = pd.DataFrame(ocr_results)
-            csv = df.to_csv(index=False)
-            b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="ocr_results.csv">Download CSV File</a>'
-            st.markdown(href, unsafe_allow_html=True)
+elif navigation == 'Otro':
+    st.write("Esta es la sección Otro.")
 
-def main():
-    st.title("Image Manipulator")
-    
-    pages = {
-        "Extractor": extractor_page,
-        # Add more pages here if you have them
-    }
-
-    page = st.sidebar.selectbox("Choose a page", list(pages.keys()))
-    pages[page]()
-
-if __name__ == "__main__":
-    main()
+elif navigation == 'Inyector':
+    st.write("Esta es la sección Inyector.")
 
