@@ -1,92 +1,94 @@
 import streamlit as st
 import os
+from PIL import Image, ImageOps
 import cv2
 import numpy as np
-from PIL import Image, ImageOps
 import requests
 import pandas as pd
-import base64
-import tempfile
 
-@st.cache(show_spinner=False)
-def process_image(img_path, process_type):
-    img = Image.open(img_path)
-    
-    if process_type == "part1":
-        img_gray = img.convert("L")
-        img_darkened = img_gray.point(lambda p: p * 0.9)
-        img_enhanced = img_darkened.point(lambda p: 255 * (p / 255) ** 0.8)
-        img_final = img_enhanced
-    elif process_type == "part2":
-        img_gray = img.convert("L")
-        threshold = 100  
-        img_binary = img_gray.point(lambda p: p > threshold and 255)
-        img_inverted = Image.fromarray(np.array(img_binary) ^ 255)
-        img_final = img_inverted.convert("RGB")
-    else:
-        img_gray = img.convert('L')
-        _, img_binary = cv2.threshold(np.array(img_gray), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        img_binary_pil = Image.fromarray(img_binary)
-        img_inverted = ImageOps.invert(img_binary_pil)
-        erosion_kernel = np.ones((3,3),np.uint8)
-        img_eroded = cv2.erode(np.array(img_inverted), erosion_kernel, iterations = 1)
-        img_final = Image.fromarray(img_eroded)
-    
-    img_final.save(img_path)
-    return img_path
+# Define las funciones para procesar las imágenes
 
-@st.cache(show_spinner=False)
-def ocr_space_url(url, overlay=False, api_key='K82787541488957'):
-    payload = {'url': url,
-               'isOverlayRequired': overlay,
-               'apikey': api_key,
-               'language': 'eng',
-               'OCREngine': 2
-               }
-    r = requests.post('https://api.ocr.space/parse/image', data=payload,)
-    return r.json()
-
-def main():
-    st.title("Extractor")
-    uploaded_files = st.file_uploader("Upload Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
-    convert_button = st.button("Convertir")
+def process_image_part1(image_path):
+    # Cargar imagen
+    img = Image.open(image_path)
     
+    # Convertir la imagen a escala de grises
+    img_gray = img.convert("L")
+
+    # Oscurecer la imagen ligeramente
+    img_darkened = img_gray.point(lambda p: p * 0.9)
+
+    # Mejorar el contraste en la imagen
+    img_enhanced = img_darkened.point(lambda p: 255 * (p / 255) ** 0.8)
+    
+    return img_enhanced
+
+# Repite esto para process_image_part2 y process_image_part3 con las modificaciones correspondientes
+
+# Define una función para extraer texto de la imagen usando OCR.space
+
+def ocr_space(image_path, api_key):
+    # Prepara la imagen para enviarla a OCR.space
+    with open(image_path, 'rb') as image_file:
+        img_data = image_file.read()
+    
+    # Define los parámetros de la API de OCR.space
+    url = 'https://api.ocr.space/parse/image'
+    headers = {'apikey': api_key}
+    data = {'file': img_data, 'OCREngine': 2}
+    
+    # Envia la solicitud y recupera la respuesta
+    response = requests.post(url, headers=headers, data=data)
+    response.raise_for_status()
+    
+    # Extrae el texto de la respuesta
+    result = response.json()
+    text = result['ParsedResults'][0]['ParsedText']
+    
+    return text
+
+# Crea la interfaz de usuario de Streamlit
+
+st.title('Extractor de imágenes')
+
+uploaded_files = st.file_uploader('Sube tus imágenes', type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+
+if uploaded_files:
+    convert_button = st.button('Convertir')
     if convert_button:
-        if uploaded_files is not None:
-            image_list = []
-            for uploaded_file in uploaded_files:
-                tfile = tempfile.mkstemp(suffix=".png")[1] 
-                with open(tfile, 'wb') as f:
-                    f.write(uploaded_file.read())
-                process_type = "part1" if "part1" in uploaded_file.name else "part2" if "part2" in uploaded_file.name else "part3"
-                processed_img_path = process_image(tfile, process_type)
-                image_list.append(processed_img_path)
+        # Prepara un dataframe para almacenar los resultados
+        df = pd.DataFrame(columns=['Imagen', 'Texto'])
+        
+        # Procesa cada archivo subido
+        for uploaded_file in uploaded_files:
+            # Guarda el archivo temporalmente
+            with open(uploaded_file.name, 'wb') as f:
+                f.write(uploaded_file.getvalue())
             
-            st.write("Las imágenes procesadas están disponibles en las siguientes URLs:")
-            for img_path in image_list:
-                st.write(f"URL: {img_path}")  # Substitute with actual hosted URLs
-                json_response = ocr_space_url(img_path)  # Substitute with actual hosted URLs
-                # Display parsed text
-                for i in json_response.get("ParsedResults"):
-                    st.write("Texto extraído:")
-                    st.write(i.get("ParsedText"))
-
-            download_button = st.button("Descargar CSV")
+            # Procesa la imagen
+            if 'part1' in uploaded_file.name:
+                img = process_image_part1(uploaded_file.name)
+            elif 'part2' in uploaded_file.name:
+                img = process_image_part2(uploaded_file.name)
+            else:
+                img = process_image_part3(uploaded_file.name)
             
-            if download_button:
-                # Construct CSV from extracted text
-                data = []
-                for img_path in image_list:
-                    json_response = ocr_space_url(img_path)
-                    for i in json_response.get("ParsedResults"):
-                        data.append([img_path, i.get("ParsedText")])
+            # Guarda la imagen procesada
+            img.save('processed_' + uploaded_file.name)
+            
+            # Extrae el texto de la imagen procesada
+            text = ocr_space('processed_' + uploaded_file.name, YOUR_API_KEY)
+            
+            # Añade el resultado al dataframe
+            df = df.append({'Imagen': uploaded_file.name, 'Texto': text}, ignore_index=True)
+        
+        # Muestra el dataframe de resultados
+        st.dataframe(df)
+        
+        # Permite descargar el dataframe como CSV
+        csv = df.to_csv(index=False)
+        b64 = base64.b64encode(csv.encode()).decode()  
+        href = f'<a href="data:file/csv;base64,{b64}" download="text.csv">Descargar CSV</a>'
+        st.markdown(href, unsafe_allow_html=True)
 
-                df = pd.DataFrame(data, columns=["Image URL", "Extracted Text"])
-                csv = df.to_csv(index=False)
-                b64 = base64.b64encode(csv.encode()).decode()  # some strings
-                href = f'<a href="data:file/csv;base64,{b64}" download="extracted_text.csv">Download CSV File</a>'
-                st.markdown(href, unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
 
