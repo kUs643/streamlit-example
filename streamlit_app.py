@@ -36,7 +36,7 @@ def process_image(img_path, process_type):
     return img_path
 
 @st.cache(show_spinner=False)
-def ocr_space_url(url, overlay=False, api_key='YOUR_API_KEY'):
+def ocr_space_url(url, overlay=False, api_key='K82787541488957'):
     payload = {'url': url,
                'isOverlayRequired': overlay,
                'apikey': api_key,
