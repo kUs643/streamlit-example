@@ -1,80 +1,91 @@
 import streamlit as st
 import os
+import cv2
 import numpy as np
 from PIL import Image, ImageOps
-import cv2
 import requests
 import pandas as pd
 import base64
 
-# API key for ocr.space
-OCR_SPACE_API_KEY = 'K82787541488957'
-
-# Define a function to make an OCR.space API call
-def ocr_space(image_path):
-    with open(image_path, 'rb') as img:
-        response = requests.post(
-            url='https://api.ocr.space/parse/image',
-            files={'image': img},
-            data={
-                'isOverlayRequired': True,
-                'apikey': OCR_SPACE_API_KEY,
-                'OCREngine': 2
-            }
-        )
-    return response.json()
-
-# Define a function to download CSV file
-def download_link(object_to_download, download_filename, download_link_text):
-    if isinstance(object_to_download,pd.DataFrame):
-        object_to_download = object_to_download.to_csv(index=False)
-
-    b64 = base64.b64encode(object_to_download.encode()).decode()
-    return f'<a href="data:file/txt;base64,{b64}" download="{download_filename}">{download_link_text}</a>'
-
-# Create a sidebar for image upload
-st.set_option('deprecation.showfileUploaderEncoding', False) # Disable warning
-uploaded_files = st.file_uploader("Upload Images", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
-
-# Apply image processing based on the part specified in the name
-df_ocr = pd.DataFrame(columns=['Image Name', 'Part', 'OCR Text'])
-for uploaded_file in uploaded_files:
-    st.image(uploaded_file)
-    img = Image.open(uploaded_file)
-    img_name = uploaded_file.name
-    img_part = img_name.split('_')[0]
-
-    if img_part == 'first':
+@st.cache(show_spinner=False)
+def process_image(img_path, process_type):
+    img = Image.open(img_path)
+    
+    if process_type == "part1":
         img_gray = img.convert("L")
         img_darkened = img_gray.point(lambda p: p * 0.9)
         img_enhanced = img_darkened.point(lambda p: 255 * (p / 255) ** 0.8)
-        img = img_enhanced
-    elif img_part == 'second':
+        img_final = img_enhanced
+    elif process_type == "part2":
         img_gray = img.convert("L")
-        threshold = 100
+        threshold = 100  
         img_binary = img_gray.point(lambda p: p > threshold and 255)
         img_inverted = Image.fromarray(np.array(img_binary) ^ 255)
-        final_img = img_inverted.convert("RGB")
-        img = final_img
-    elif img_part == 'third':
+        img_final = img_inverted.convert("RGB")
+    else:
         img_gray = img.convert('L')
         _, img_binary = cv2.threshold(np.array(img_gray), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         img_binary_pil = Image.fromarray(img_binary)
         img_inverted = ImageOps.invert(img_binary_pil)
         erosion_kernel = np.ones((3,3),np.uint8)
         img_eroded = cv2.erode(np.array(img_inverted), erosion_kernel, iterations = 1)
-        img = Image.fromarray(img_eroded)
+        img_final = Image.fromarray(img_eroded)
+    
+    img_final.save(img_path)
+    return img_path
 
-    img.save(f'processed_{img_name}')
-    ocr_result = ocr_space(f'processed_{img_name}')
-    df_ocr = df_ocr.append({'Image Name': img_name, 'Part': img_part, 'OCR Text': ocr_result['ParsedResults'][0]['ParsedText']}, ignore_index=True)
-    os.remove(f'processed_{img_name}')
+@st.cache(show_spinner=False)
+def ocr_space_url(url, overlay=False, api_key='K82787541488957'):
+    payload = {'url': url,
+               'isOverlayRequired': overlay,
+               'apikey': api_key,
+               'language': 'eng',
+               'OCREngine': 2
+               }
+    r = requests.post('https://api.ocr.space/parse/image', data=payload,)
+    return r.json()
 
-if st.button("Convert"):
-    st.write(df_ocr)
+def main():
+    st.title("Extractor")
+    uploaded_files = st.file_uploader("Upload Images", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+    convert_button = st.button("Convertir")
+    
+    if convert_button:
+        if uploaded_files is not None:
+            image_list = []
+            for uploaded_file in uploaded_files:
+                tfile = tempfile.NamedTemporaryFile(delete=False) 
+                tfile.write(uploaded_file.read())
+                process_type = "part1" if "part1" in uploaded_file.name else "part2" if "part2" in uploaded_file.name else "part3"
+                processed_img_path = process_image(tfile.name, process_type)
+                image_list.append(processed_img_path)
+            
+            st.write("Las imágenes procesadas están disponibles en las siguientes URLs:")
+            for img_path in image_list:
+                st.write(f"URL: {img_path}")  # Substitute with actual hosted URLs
+                json_response = ocr_space_url(img_path)  # Substitute with actual hosted URLs
+                # Display parsed text
+                for i in json_response.get("ParsedResults"):
+                    st.write("Texto extraído:")
+                    st.write(i.get("ParsedText"))
 
-if st.button("Download CSV file"):
-    tmp_download_link = download_link(df_ocr, 'ocr_output.csv', 'Click here to download your data!')
-    st.markdown(tmp_download_link, unsafe_allow_html=True)
+            download_button = st.button("Descargar CSV")
+            
+            if download_button:
+                # Construct CSV from extracted text
+                data = []
+                for img_path in image_list:
+                    json_response = ocr_space_url(img_path)
+                    for i in json_response.get("ParsedResults"):
+                        data.append([img_path, i.get("ParsedText")])
+
+                df = pd.DataFrame(data, columns=["Image URL", "Extracted Text"])
+                csv = df.to_csv(index=False)
+                b64 = base64.b64encode(csv.encode()).decode()  # some strings
+                href = f'<a href="data:file/csv;base64,{b64}" download="extracted_text.csv">Download CSV File</a>'
+                st.markdown(href, unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()
 
 
