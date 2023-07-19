@@ -6,6 +6,7 @@ from PIL import Image, ImageOps
 import requests
 import pandas as pd
 import base64
+import tempfile
 
 @st.cache(show_spinner=False)
 def process_image(img_path, process_type):
@@ -35,7 +36,7 @@ def process_image(img_path, process_type):
     return img_path
 
 @st.cache(show_spinner=False)
-def ocr_space_url(url, overlay=False, api_key='K82787541488957'):
+def ocr_space_url(url, overlay=False, api_key='YOUR_API_KEY'):
     payload = {'url': url,
                'isOverlayRequired': overlay,
                'apikey': api_key,
@@ -87,5 +88,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
