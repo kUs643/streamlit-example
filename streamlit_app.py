@@ -55,10 +55,11 @@ def main():
         if uploaded_files is not None:
             image_list = []
             for uploaded_file in uploaded_files:
-                tfile = tempfile.NamedTemporaryFile(delete=False) 
-                tfile.write(uploaded_file.read())
+                tfile = tempfile.mkstemp(suffix=".png")[1] 
+                with open(tfile, 'wb') as f:
+                    f.write(uploaded_file.read())
                 process_type = "part1" if "part1" in uploaded_file.name else "part2" if "part2" in uploaded_file.name else "part3"
-                processed_img_path = process_image(tfile.name, process_type)
+                processed_img_path = process_image(tfile, process_type)
                 image_list.append(processed_img_path)
             
             st.write("Las imágenes procesadas están disponibles en las siguientes URLs:")
