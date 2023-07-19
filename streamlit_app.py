@@ -77,9 +77,6 @@ def app():
             zip_filename = create_zip_folder(folder_name)
             st.markdown(get_binary_file_downloader_html(zip_filename, 'ZIP'), unsafe_allow_html=True)
 
-    elif page == "Extractor":
-        st.header("Extractor")
-        # Implementa la funcionalidad de la página 2 aquí
 def process_img_1(img):
     img_gray = img.convert("L")
     img_darkened = img_gray.point(lambda p: p * 0.9)
@@ -115,10 +112,10 @@ def ocr_space(image, overlay=False, api_key='YOUR_OCR_SPACE_API_KEY', language='
     text_detected = result.get('ParsedResults')[0].get('ParsedText')
     return text_detected
 
-def main():
-    st.title("Image Manipulator")
+def extractor_page():
+    st.header("Extractor")
     uploaded_files = st.file_uploader("Upload Images", accept_multiple_files=True)
-    
+
     if uploaded_files:
         if st.button('Convert'):
             ocr_results = []
@@ -130,10 +127,10 @@ def main():
                     processed_img = process_img_2(img)
                 else:
                     processed_img = process_img_3(img)
-                
+
                 ocr_result = ocr_space(processed_img)
                 ocr_results.append({file.name: ocr_result})
-            
+
             st.write(ocr_results)
 
         if st.button('Download CSV'):
@@ -143,8 +140,17 @@ def main():
             href = f'<a href="data:file/csv;base64,{b64}" download="ocr_results.csv">Download CSV File</a>'
             st.markdown(href, unsafe_allow_html=True)
 
-    elif page == "Página 3":
-        st.header("Página 3")
+def main():
+    st.title("Image Manipulator")
+    
+    pages = {
+        "Extractor": extractor_page,
+        # Add more pages here if you have them
+    }
+
+    page = st.sidebar.selectbox("Choose a page", list(pages.keys()))
+    pages[page]()
+
         # Implementa la funcionalidad de la página 3 aquí
 
 
