@@ -34,7 +34,7 @@ def ocr_space(image_path, api_key):
     
     # Define los parámetros de la API de OCR.space
     url = 'https://api.ocr.space/parse/image'
-    headers = {'apikey': api_key}
+    headers = {'K82787541488957': api_key}
     data = {'file': img_data, 'OCREngine': 2}
     
     # Envia la solicitud y recupera la respuesta
