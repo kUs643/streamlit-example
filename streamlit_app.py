@@ -1,159 +1,80 @@
 import streamlit as st
-from PIL import Image, ImageOps
+import os
 import numpy as np
+from PIL import Image, ImageOps
 import cv2
 import requests
-import json
 import pandas as pd
-import os
+import base64
 
-# Crear una lista para almacenar todas las imágenes de las partidas
-imagenes_partidas = [None]*5
+# API key for ocr.space
+OCR_SPACE_API_KEY = 'K82787541488957'
 
-# Crear directorio para almacenar imágenes cortadas
-if not os.path.exists('cortadas'):
-    os.makedirs('cortadas')
+# Define a function to make an OCR.space API call
+def ocr_space(image_path):
+    with open(image_path, 'rb') as img:
+        response = requests.post(
+            url='https://api.ocr.space/parse/image',
+            files={'image': img},
+            data={
+                'isOverlayRequired': True,
+                'apikey': OCR_SPACE_API_KEY,
+                'OCREngine': 2
+            }
+        )
+    return response.json()
 
-# Crear la barra de navegacion
-st.sidebar.title("Navegación")
-navigation = st.sidebar.radio("Ir a", ['Organizador', 'Otro', 'Inyector'])
+# Define a function to download CSV file
+def download_link(object_to_download, download_filename, download_link_text):
+    if isinstance(object_to_download,pd.DataFrame):
+        object_to_download = object_to_download.to_csv(index=False)
 
-if navigation == 'Organizador':
-    # Crear los recuadros para subir las imágenes
-    for i in range(5):
-        st.header(f"Partida {i+1}")
-        uploaded_file = st.file_uploader(f"Sube la imagen para la partida {i+1}", type=['png', 'jpg', 'jpeg'])
-        if uploaded_file is not None:
-            image = Image.open(uploaded_file)
-            imagenes_partidas[i] = image
-            st.image(image, caption=f"Imagen subida para la partida {i+1}.", use_column_width=True)
+    b64 = base64.b64encode(object_to_download.encode()).decode()
+    return f'<a href="data:file/txt;base64,{b64}" download="{download_filename}">{download_link_text}</a>'
 
-    # Botón para cortar y guardar las imágenes
-    if st.button('Cortar y guardar imágenes'):
-        for i, image in enumerate(imagenes_partidas):
-            if image is not None:
-                # Definir las regiones a cortar
-                box1 = (55, 79, 55+197, 79+96)
-                box2 = (743, 72, 743+379, 72+91)
-                box3 = (332, 299, 332+1257, 299+298)
+# Create a sidebar for image upload
+st.set_option('deprecation.showfileUploaderEncoding', False) # Disable warning
+uploaded_files = st.file_uploader("Upload Images", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
 
-                # Cortar las imágenes
-                cropped1 = image.crop(box1)
-                cropped2 = image.crop(box2)
-                cropped3 = image.crop(box3)
+# Apply image processing based on the part specified in the name
+df_ocr = pd.DataFrame(columns=['Image Name', 'Part', 'OCR Text'])
+for uploaded_file in uploaded_files:
+    st.image(uploaded_file)
+    img = Image.open(uploaded_file)
+    img_name = uploaded_file.name
+    img_part = img_name.split('_')[0]
 
-                # Guardar las imágenes cortadas
-                cropped1.save(f"cortadas/partida{i+1}-parte1.jpg")
-                cropped2.save(f"cortadas/partida{i+1}-parte2.jpg")
-                cropped3.save(f"cortadas/partida{i+1}-parte3.jpg")
-
-        st.success('¡Imágenes cortadas y guardadas!')
-
-elif navigation == 'Otro':
-    st.write("Esta es la sección Otro.")
-    import streamlit as st
-from PIL import Image, ImageOps
-import numpy as np
-import cv2
-import requests
-import json
-import pandas as pd
-import os
-
-def process_image(img, part):
-    if part == 1:
-        # Convert the image to grayscale
+    if img_part == 'first':
         img_gray = img.convert("L")
-
-        # Darken the image slightly
         img_darkened = img_gray.point(lambda p: p * 0.9)
-
-        # Enhance contrast in the image
         img_enhanced = img_darkened.point(lambda p: 255 * (p / 255) ** 0.8)
-
-        return img_enhanced
-
-    elif part == 2:
-        # Convert the image to grayscale
+        img = img_enhanced
+    elif img_part == 'second':
         img_gray = img.convert("L")
-
-        # Binarize the image
-        threshold = 100  # You might need to adjust this value based on your specific image
+        threshold = 100
         img_binary = img_gray.point(lambda p: p > threshold and 255)
-
-        # Invert the image (if necessary)
         img_inverted = Image.fromarray(np.array(img_binary) ^ 255)
-
-        # Ensure the image is in the correct mode for saving
         final_img = img_inverted.convert("RGB")
-
-        return final_img
-
-    elif part == 3:
-        # Convert the image to grayscale
+        img = final_img
+    elif img_part == 'third':
         img_gray = img.convert('L')
-
-        # Convert the grayscale image to binary using Otsu's binarization
         _, img_binary = cv2.threshold(np.array(img_gray), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-
-        # Convert the binary image back to PIL format
         img_binary_pil = Image.fromarray(img_binary)
-
-        # Invert the colors of the binary image
         img_inverted = ImageOps.invert(img_binary_pil)
-
-        # Define a structuring element for erosion
         erosion_kernel = np.ones((3,3),np.uint8)
-
-        # Apply erosion to make the black regions thicker
         img_eroded = cv2.erode(np.array(img_inverted), erosion_kernel, iterations = 1)
+        img = Image.fromarray(img_eroded)
 
-        return img_eroded
+    img.save(f'processed_{img_name}')
+    ocr_result = ocr_space(f'processed_{img_name}')
+    df_ocr = df_ocr.append({'Image Name': img_name, 'Part': img_part, 'OCR Text': ocr_result['ParsedResults'][0]['ParsedText']}, ignore_index=True)
+    os.remove(f'processed_{img_name}')
 
-def ocr_space(image, api_key='Your_API_Key', language='eng'):
-    with open(image, 'rb') as image_file:
-        img_data = image_file.read()
-    url = 'https://api.ocr.space/parse/image'
-    headers = {'apikey': api_key}
-    data = {'language': language, 'isOverlayRequired': False, 'OCREngine': 2}
-    response = requests.post(url, headers=headers, data=data, files={'image': img_data}).json()
+if st.button("Convert"):
+    st.write(df_ocr)
 
-    if response['IsErroredOnProcessing']:
-        st.error("The OCR.space API returned an error:")
-        st.write(response['ErrorMessage'])
-        return None
+if st.button("Download CSV file"):
+    tmp_download_link = download_link(df_ocr, 'ocr_output.csv', 'Click here to download your data!')
+    st.markdown(tmp_download_link, unsafe_allow_html=True)
 
-    parsed_results = response['ParsedResults'][0]['ParsedText']
-    return parsed_results
-
-# Crear la barra de navegacion
-st.sidebar.title("Navegación")
-navigation = st.sidebar.radio("Ir a", ['Organizador', 'Extractor', 'Inyector'])
-
-if navigation == 'Extractor':
-    uploaded_files = st.file_uploader("Sube las imágenes", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
-
-    if st.button('Convertir'):
-        for uploaded_file in uploaded_files:
-            with open(uploaded_file.name, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            img = Image.open(uploaded_file.name)
-            part = int(uploaded_file.name.split("-")[-1][0])  # Assumes the name is in the format 'partidaN-parteM.jpg'
-            img_processed = process_image(img, part)
-            img_processed.save(f'processed/{uploaded_file.name}')
-
-            result = ocr_space(f'processed/{uploaded_file.name}')
-
-            if result is not None:
-                st.write(f'Resultado para {uploaded_file.name}:')
-                st.write(result)
-
-        if st.button('Descargar resultados'):
-            # Assuming all the results have been stored in a pandas DataFrame called 'df'
-            df.to_csv('results.csv')
-            st.success('¡Resultados descargados!')
-
-
-elif navigation == 'Inyector':
-    st.write("Esta es la sección Inyector.")
 
